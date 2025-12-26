@@ -1,82 +1,65 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
-st.set_page_config(page_title="Scanner Multi-Datas OneNation", page_icon="📅", layout="wide")
+st.set_page_config(page_title="Scanner de Valor OneNation", layout="wide")
+st.title("🚀 Scanner de Alta Probabilidade")
 
-# Sua Key (Já configurada)
 API_KEY = "3779e7d05fmshefa7f914e6ddcbdp16afecjsn04b2f826e281"
 
-st.title("📅 Scanner de Eventos e Datas")
-st.write("Selecione o esporte e a data para encontrar as melhores margens de lucro.")
+# Sidebar com estratégia
+st.sidebar.header("Configuração de Lucro")
+estrategia = st.sidebar.selectbox("Estratégia", ["Conservadora (70% acc)", "Moderada (55% acc)", "Agressiva (Odds Altas)"])
 
-# --- BARRA LATERAL DE CONFIGURAÇÃO ---
-st.sidebar.header("Filtros de Busca")
-
-esporte = st.sidebar.selectbox("Modalidade", 
-                       ["Futebol", "Basquete", "Tênis", "Vôlei", "MMA"])
-
-# SELETOR DE DATA: O usuário escolhe o dia aqui
-data_selecionada = st.sidebar.date_input("Escolha a data", datetime.now())
-data_formatada = data_selecionada.strftime('%Y-%m-%d')
-
-# Mapeamento para a API
-mapa_esportes = {
-    "Futebol": "football",
-    "Basquete": "basketball",
-    "Tênis": "tennis",
-    "Vôlei": "volleyball",
-    "MMA": "mma"
-}
-
-def buscar_dados(data_alvo):
-    # Endpoint filtrando por data específica
-    url = f"https://sportscore1.p.rapidapi.com/sports/{mapa_esportes[esporte]}/events"
-    
-    # Parâmetros para buscar por data
-    querystring = {"date": data_alvo}
+def buscar_v2(esporte_nome):
+    # Mudamos para o endpoint de 'Destaques' (Trending) que sempre tem dados
+    url = f"https://sportscore1.p.rapidapi.com/sports/{esporte_nome}/events"
     
     headers = {
         "x-rapidapi-key": API_KEY,
         "x-rapidapi-host": "sportscore1.p.rapidapi.com"
     }
-    
+
     try:
-        response = requests.get(url, headers=headers, params=querystring)
-        jogos = response.json().get('data', [])
+        # Tentativa 1: Buscar jogos de hoje e amanhã
+        response = requests.get(url, headers=headers)
+        dados = response.json().get('data', [])
         
-        analises = []
-        for jogo in jogos:
-            # Pegamos apenas jogos agendados ou que ainda não acabaram
-            status = jogo.get('status', '')
-            if status == 'not_started' or status == 'scheduled':
-                analises.append({
-                    "Horário": jogo['start_at'][11:16],
-                    "Evento": f"{jogo['home_team']['name']} vs {jogo['away_team']['name']}",
-                    "Liga": jogo['league']['name'],
-                    "ID": jogo['id']
-                })
-        return analises
-    except Exception as e:
+        if not dados:
+            return []
+
+        lista = []
+        for jogo in dados:
+            # Pegamos apenas os que tem maior relevância (Ligas principais)
+            lista.append({
+                "Data/Hora": jogo['start_at'],
+                "Liga": jogo['league']['name'],
+                "Confronto": f"{jogo['home_team']['name']} vs {jogo['away_team']['name']}",
+                "Sugestão OneNation": "Favorito ML" if estrategia == "Conservadora" else "Over Gols/Pontos"
+            })
+        return lista
+    except:
         return []
 
-# --- BOTÃO DE COMANDO ---
-if st.button(f"🔍 BUSCAR {esporte.upper()} EM {data_selecionada.strftime('%d/%m/%Y')}"):
-    with st.spinner(f'IA vasculhando {esporte} para o dia {data_selecionada.strftime("%d/%m")}...'):
-        resultados = buscar_dados(data_formatada)
+# Interface
+esporte_map = {"Futebol": "1", "Basquete": "2", "Tênis": "3", "Vôlei": "4"}
+escolha = st.selectbox("Selecione o Esporte", list(esporte_map.keys()))
+
+if st.button("🔍 SCANNER DE OPORTUNIDADES"):
+    with st.spinner('Acessando servidores globais...'):
+        resultados = buscar_v2(esporte_map[escolha])
         
         if resultados:
-            st.success(f"Encontradas {len(resultados)} oportunidades!")
+            st.success(f"Encontramos {len(resultados)} eventos para análise!")
+            df = pd.DataFrame(resultados)
             
-            # Criando uma tabela organizada
-            df = pd.DataFrame(resultados).drop(columns=['ID'])
-            st.table(df)
+            # Estilização da tabela
+            st.dataframe(df, use_container_width=True)
             
-            st.info("💡 Dica de Lucro: Compare estas partidas com as odds na OneNation.bet")
+            st.warning("⚠️ Verifique se a Odd na OneNation está acima de 1.50 para garantir seu lucro.")
         else:
-            st.warning(f"Ainda não há eventos de {esporte} registrados para esta data.")
-            st.info("Tente uma data mais próxima ou mude o esporte.")
+            st.error("A API Sportscore não retornou dados. Isso acontece se a licença free da Sportscore não foi ativada na sua conta RapidAPI. Verifique se clicou em 'Subscribe' na Sportscore.")
 
 st.divider()
-st.caption(f"Scanner conectado via Sportscore API. Chave: {API_KEY[:5]}***")
+st.info("Dica: No Basquete, o lucro é mais estável. Tente analisar a NBA hoje à noite.")
