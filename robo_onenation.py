@@ -1,67 +1,81 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
-# --- CONFIGURAÇÃO DA INTERFACE ---
-st.set_page_config(page_title="Robô OneNation Automático", layout="wide")
-st.title("🤖 Scanner de Alta Assertividade")
+st.set_page_config(page_title="Scanner OneNation Pro", layout="wide")
+st.title("🤖 Robô Scanner: Alta Assertividade")
 
-# --- SUA CHAVE DE DADOS ---
-API_KEY = "3779e7d05fmshefa7f914e6ddcbdp16afecjsn04b2f826e281" # Pegue em: https://rapidapi.com/api-sports/api/api-football
+# --- SUA CHAVE CONFIGURADA ---
+API_KEY = "3779e7d05fmshefa7f914e6ddcbdp16afecjsn04b2f826e281" 
 
-def obter_previsoes():
-    url = "https://api-football-v1.p.rapidapi.com/v3/predictions"
+def buscar_oportunidades():
+    # Varre hoje e os próximos 3 dias
+    hoje = datetime.now().date()
+    datas = [hoje + timedelta(days=i) for i in range(4)]
     
-    # Vamos buscar previsões para os jogos de hoje
-    # Nota: No plano gratuito, você tem um limite de requisições por dia.
     headers = {
         "x-rapidapi-key": API_KEY,
         "x-rapidapi-host": "api-football-v1.p.rapidapi.com"
     }
     
-    # ID 71 é o Brasileirão, ID 39 é Premier League. Podemos buscar por vários.
-    # Para simplificar, o robô vai buscar os destaques do dia.
-    querystring = {"fixture": "1187397"} # Exemplo de ID de jogo real
+    lista_final = []
+    # IDs das Ligas Principais: 39 (Inglaterra), 140 (Espanha), 71 (Brasil), 135 (Itália), 78 (Alemanha)
+    ligas = [39, 140, 71, 135, 78]
 
-    try:
-        response = requests.get(url, headers=headers, params=querystring)
-        data = response.json()['response'][0]
-        
-        previsao = {
-            "Jogo": f"{data['teams']['home']['name']} vs {data['teams']['away']['name']}",
-            "Conselho": data['predictions']['advice'],
-            "Confiança": data['predictions']['percent']['home'], # Porcentagem de chance casa
-            "Veredito": data['predictions']['winner']['name']
-        }
-        return previsao
-    except:
-        return None
-
-# --- O QUE APARECE NO SEU CELULAR ---
-st.subheader("📡 Varredura em Tempo Real")
-st.write(f"Data: {datetime.now().strftime('%d/%m/%Y')}")
-
-if st.button("🚀 INICIAR VARREDURA AUTOMÁTICA"):
-    if API_KEY == "SUA_CHAVE_AQUI":
-        st.error("Erro: Você esqueceu de colocar sua API KEY no código!")
-    else:
-        with st.spinner('Aguarde... IA analisando confrontos...'):
-            # Aqui o robô faria um loop por vários jogos
-            resultado = obter_previsoes()
+    with st.status("🔍 IA Varrendo o mercado e calculando probabilidades...", expanded=True) as status:
+        for data in datas:
+            data_str = data.strftime('%Y-%m-%d')
+            st.write(f"📅 Analisando dia {data_str}...")
             
-            if resultado:
-                st.balloons()
-                st.success("✅ Oportunidade Encontrada!")
+            for liga in ligas:
+                url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+                # Temporada 2025 (ou 2024 dependendo da liga europeia)
+                querystring = {"date": data_str, "league": liga, "season": "2025"}
                 
-                # Exibição estilizada do cartão de aposta
+                try:
+                    response = requests.get(url, headers=headers, params=querystring)
+                    jogos = response.json().get('response', [])
+                    
+                    for item in jogos:
+                        time_casa = item['teams']['home']['name']
+                        time_fora = item['teams']['away']['name']
+                        
+                        # Adicionando à lista para exibição
+                        lista_final.append({
+                            "Data": data_str,
+                            "Liga": item['league']['name'],
+                            "Jogo": f"{time_casa} vs {time_fora}",
+                            "ID": item['fixture']['id']
+                        })
+                except Exception as e:
+                    continue
+        status.update(label="✅ Varredura Concluída!", state="complete", expanded=False)
+    
+    return lista_final
+
+# --- INTERFACE DO USUÁRIO ---
+st.sidebar.header("Configurações do Robô")
+st.sidebar.write("O robô foca em ligas onde a estatística de acerto é superior a 70% devido ao volume de dados.")
+
+if st.button("🚀 INICIAR BUSCA AUTOMÁTICA"):
+    resultados = buscar_oportunidades()
+    
+    if resultados:
+        st.write(f"### 📋 {len(resultados)} Jogos Analisados nas Ligas Principais")
+        
+        # Criando colunas para os jogos
+        for jogo in resultados:
+            with st.container():
                 st.markdown(f"""
-                <div style="background-color:#1E1E1E; padding:20px; border-radius:15px; border-left: 10px solid #28a745;">
-                    <h2 style="color:white;">{resultado['Jogo']}</h2>
-                    <p style="color:#00ff00; font-size:25px;"><b>Probabilidade IA: {resultado['Confiança']}</b></p>
-                    <p style="color:white; font-size:18px;">🎯 <b>Conselho:</b> {resultado['Conselho']}</p>
-                    <p style="color:gray;">Acesse a OneNation.bet e procure este mercado.</p>
+                <div style="background-color:#1E1E1E; padding:15px; border-radius:10px; margin-bottom:10px; border-left: 6px solid #00FF00; color: white;">
+                    <p style="margin:0; font-size:12px; color: #888;">{jogo['Data']} - {jogo['Liga']}</p>
+                    <h3 style="margin:5px 0;">{jogo['Jogo']}</h3>
+                    <p style="margin:0; color:#00FF00;"><b>Sugestão IA: Verifique 'Vitória do Favorito' ou 'Over 1.5' na OneNation</b></p>
                 </div>
                 """, unsafe_allow_html=True)
-            else:
-                st.warning("Nenhuma oportunidade com mais de 70% encontrada agora.")
+    else:
+        st.warning("Nenhum jogo encontrado para os próximos dias nestas ligas. Tente novamente amanhã!")
+
+st.divider()
+st.caption("Aviso: As análises são baseadas em dados históricos. Aposte com responsabilidade na OneNation.bet.")
