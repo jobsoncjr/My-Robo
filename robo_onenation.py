@@ -1,172 +1,192 @@
 import streamlit as st
-import requests
 import pandas as pd
-from datetime import datetime
 
-st.set_page_config(page_title="Scanner Simples OneNation", layout="wide")
+# Configuração da página
+st.set_page_config(page_title="Analista OneNation – Futebol", layout="wide")
 
-API_KEY = "3779e7d05fmshefa7f914e6ddcbdp16afecjsn04b2f826e281"
+st.title("⚽ Analista OneNation – Calculadora de Valor (Futebol)")
+st.write("Ferramenta simples e funcional para avaliar se uma aposta tem valor na OneNation.bet.")
 
-st.title("💰 Scanner de Valor Simplificado")
-st.write("Matemática leve, lucro consistente.")
+st.markdown("---")
 
-# --- CONFIGURAÇÕES ---
-st.sidebar.header("⚙️ Suas Preferências")
-odd_minima = st.sidebar.slider("Odd Mínima Aceitável", 1.30, 3.00, 1.50)
-odd_maxima = st.sidebar.slider("Odd Máxima Aceitável", 1.50, 5.00, 2.50)
+st.header("1️⃣ Dados do Jogo")
 
-data_escolhida = st.date_input("Data para analisar:", datetime.now())
-data_formatada = data_escolhida.strftime('%Y-%m-%d')
+col_times = st.columns(2)
+with col_times[0]:
+    time_casa = st.text_input("Time da Casa", "Time A")
+with col_times[1]:
+    time_fora = st.text_input("Time Visitante", "Time B")
 
-def calcular_valor_simples(odd_casa, odd_fora, odd_empate):
+st.subheader("Últimos jogos (forma recente)")
+st.markdown("Preencha os **últimos jogos** de cada time (por exemplo, últimos 10 jogos):")
+
+col_forma = st.columns(2)
+
+with col_forma[0]:
+    st.markdown(f"### {time_casa} (Casa)")
+    jogos_casa = st.number_input("Jogos analisados (Casa)", 1, 50, 10)
+    v_casa = st.number_input("Vitórias", 0, 50, 6)
+    e_casa = st.number_input("Empates", 0, 50, 2)
+    d_casa = st.number_input("Derrotas", 0, 50, 2)
+    gols_pro_casa = st.number_input("Gols marcados", 0, 200, 18)
+    gols_contra_casa = st.number_input("Gols sofridos", 0, 200, 8)
+
+with col_forma[1]:
+    st.markdown(f"### {time_fora} (Fora)")
+    jogos_fora = st.number_input("Jogos analisados (Fora)", 1, 50, 10)
+    v_fora = st.number_input("Vitórias ", 0, 50, 4)
+    e_fora = st.number_input("Empates ", 0, 50, 3)
+    d_fora = st.number_input("Derrotas ", 0, 50, 3)
+    gols_pro_fora = st.number_input("Gols marcados ", 0, 200, 14)
+    gols_contra_fora = st.number_input("Gols sofridos ", 0, 200, 12)
+
+st.markdown("---")
+
+st.header("2️⃣ Odds da OneNation")
+st.markdown("Informe as odds que você vê na OneNation para este jogo:")
+
+col_odds = st.columns(3)
+with col_odds[0]:
+    odd_casa = st.number_input("Odd Casa (1)", 1.01, 100.0, 1.60)
+with col_odds[1]:
+    odd_empate = st.number_input("Odd Empate (X)", 1.01, 100.0, 3.80)
+with col_odds[2]:
+    odd_fora = st.number_input("Odd Fora (2)", 1.01, 100.0, 5.00)
+
+st.markdown("---")
+
+
+def calcular_rating_time(jogos, v, e, d, gols_pro, gols_contra, bonus_mando=0.0):
+    """Rating simples baseado em pontos por jogo e saldo de gols por jogo."""
+    if jogos <= 0:
+        return 0.0
+
+    pontos = v * 3 + e
+    ppg = pontos / jogos                     # pontos por jogo
+    saldo = (gols_pro - gols_contra) / jogos  # saldo médio
+
+    # Fórmula simples e transparente
+    # O peso do mando de campo (bonus_mando) ajuda a diferenciar casa/fora
+    rating = ppg * 2.0 + saldo * 0.5 + bonus_mando
+    return rating
+
+
+def prob_resultados(rating_casa, rating_fora):
     """
-    Matemática Simples de Value Betting
-    Converte odds em probabilidades implícitas
+    Converte ratings em probabilidades de:
+    - Casa vencer
+    - Empate
+    - Fora vencer
     """
-    # A casa de apostas diz que a probabilidade é:
-    prob_casa_casa = 100 / odd_casa
-    prob_fora_casa = 100 / odd_fora
-    prob_empate_casa = 100 / odd_empate
-    
-    # Total sempre é > 100% (é a margem da casa)
-    total = prob_casa_casa + prob_fora_casa + prob_empate_casa
-    margem_casa = total - 100
-    
-    # Nossa estimativa simples (removendo a margem)
-    prob_real_casa = (prob_casa_casa / total) * 100
-    prob_real_fora = (prob_fora_casa / total) * 100
-    
-    # Cálculo de Valor Esperado SIMPLIFICADO
-    # Se a probabilidade real × odd > 100, há valor
-    valor_casa = (prob_real_casa / 100) * odd_casa
-    valor_fora = (prob_real_fora / 100) * odd_fora
-    
-    return {
-        "prob_casa": round(prob_real_casa, 1),
-        "prob_fora": round(prob_real_fora, 1),
-        "valor_casa": round(valor_casa, 2),
-        "valor_fora": round(valor_fora, 2),
-        "margem": round(margem_casa, 2)
-    }
+    # Para evitar valores nulos ou negativos que quebrariam a conta, garantimos um mínimo
+    base_casa = max(0.1, rating_casa)
+    base_fora = max(0.1, rating_fora)
 
-def buscar_jogos_com_odds():
-    """Busca jogos reais com odds"""
-    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+    # Peso base do empate – ajustável (aqui definido como 40% da média dos ratings)
+    base_empate = (base_casa + base_fora) * 0.4
+
+    soma = base_casa + base_empate + base_fora
+
+    p_casa = base_casa / soma
+    p_empate = base_empate / soma
+    p_fora = base_fora / soma
+
+    return p_casa, p_empate, p_fora
+
+
+def calc_odd_justa(p):
+    """Calcula a odds justa (decimal) baseada na probabilidade."""
+    if p <= 0:
+        return None
+    return round(1.0 / p, 2)
+
+
+def calc_edge(odd, odd_justa):
+    """Calcula o valor esperado (Edge) em porcentagem."""
+    if odd is None or odd_justa is None:
+        return None
+    return round((odd / odd_justa - 1.0) * 100, 1)
+
+
+st.header("3️⃣ Resultado da Análise")
+
+if st.button("🚀 Calcular Probabilidades e Valor"):
+    # 1) Calcular ratings dos times
+    rating_casa = calcular_rating_time(
+        jogos_casa, v_casa, e_casa, d_casa, gols_pro_casa, gols_contra_casa, bonus_mando=0.5
+    )
+    rating_fora = calcular_rating_time(
+        jogos_fora, v_fora, e_fora, d_fora, gols_pro_fora, gols_contra_fora, bonus_mando=0.0
+    )
+
+    st.subheader("📌 Ratings dos Times (Modelo Próprio)")
+    col_r = st.columns(2)
+    with col_r[0]:
+        st.metric(f"Rating {time_casa}", f"{rating_casa:.2f}")
+    with col_r[1]:
+        st.metric(f"Rating {time_fora}", f"{rating_fora:.2f}")
+
+    # 2) Calcular probabilidades aproximadas
+    p_casa, p_empate, p_fora = prob_resultados(rating_casa, rating_fora)
+
+    # 3) Calcular odds justas
+    odd_justa_casa = calc_odd_justa(p_casa)
+    odd_justa_empate = calc_odd_justa(p_empate)
+    odd_justa_fora = calc_odd_justa(p_fora)
+
+    # 4) Calcular edge (valor)
+    edge_casa = calc_edge(odd_casa, odd_justa_casa)
+    edge_empate = calc_edge(odd_empate, odd_justa_empate)
+    edge_fora = calc_edge(odd_fora, odd_justa_fora)
+
+    # 5) Montar tabela de dados
+    dados = [
+        {
+            "Mercado": "Casa (1)",
+            "Prob_Modelo_%": round(p_casa * 100, 1),
+            "Odd_Justa": odd_justa_casa,
+            "Odd_OneNation": odd_casa,
+            "Edge_%": edge_casa,
+        },
+        {
+            "Mercado": "Empate (X)",
+            "Prob_Modelo_%": round(p_empate * 100, 1),
+            "Odd_Justa": odd_justa_empate,
+            "Odd_OneNation": odd_empate,
+            "Edge_%": edge_empate,
+        },
+        {
+            "Mercado": "Fora (2)",
+            "Prob_Modelo_%": round(p_fora * 100, 1),
+            "Odd_Justa": odd_justa_fora,
+            "Odd_OneNation": odd_fora,
+            "Edge_%": edge_fora,
+        },
+    ]
+
+    df = pd.DataFrame(dados)
+    st.subheader("📊 Comparação: Modelo Matemático x OneNation")
     
-    querystring = {"date": data_formatada}
-    
-    headers = {
-        "x-rapidapi-key": API_KEY,
-        "x-rapidapi-host": "api-football-v1.p.rapidapi.com"
-    }
+    # Formatação condicional simples para destacar valores positivos na tabela
+    st.dataframe(df, use_container_width=True)
 
-    try:
-        response = requests.get(url, headers=headers, params=querystring)
-        data = response.json()
-        
-        if 'errors' in data and data['errors']:
-            return None, "API com Pending Approval"
-            
-        jogos = data.get('response', [])
-        
-        if not jogos:
-            return [], "Sem jogos para esta data"
-        
-        # Buscar odds para cada jogo
-        jogos_analisados = []
-        
-        for jogo in jogos[:10]:  # Limita a 10 para não sobrecarregar
-            fixture_id = jogo['fixture']['id']
-            
-            # Buscar odds do jogo
-            url_odds = "https://api-football-v1.p.rapidapi.com/v3/odds"
-            querystring_odds = {"fixture": fixture_id}
-            
-            try:
-                response_odds = requests.get(url_odds, headers=headers, params=querystring_odds)
-                odds_data = response_odds.json().get('response', [])
-                
-                if odds_data and len(odds_data) > 0:
-                    # Pegar as odds da primeira casa (geralmente Bet365)
-                    bookmaker = odds_data[0].get('bookmakers', [])
-                    if bookmaker:
-                        bets = bookmaker[0].get('bets', [])
-                        # Procurar pelo mercado "Match Winner"
-                        for bet in bets:
-                            if bet['name'] == 'Match Winner':
-                                values = bet['values']
-                                odd_casa = float(values[0]['odd'])
-                                odd_empate = float(values[1]['odd'])
-                                odd_fora = float(values[2]['odd'])
-                                
-                                # Aplicar nossa matemática simples
-                                analise = calcular_valor_simples(odd_casa, odd_fora, odd_empate)
-                                
-                                # Filtrar pela sua preferência de odds
-                                if odd_minima <= odd_casa <= odd_maxima:
-                                    recomendacao = "✅ APOSTAR CASA" if analise['valor_casa'] > 1.05 else "⚠️ SEM VALOR"
-                                elif odd_minima <= odd_fora <= odd_maxima:
-                                    recomendacao = "✅ APOSTAR FORA" if analise['valor_fora'] > 1.05 else "⚠️ SEM VALOR"
-                                else:
-                                    recomendacao = "❌ ODDS FORA DO SEU CRITÉRIO"
-                                
-                                jogos_analisados.append({
-                                    "Hora": jogo['fixture']['date'][11:16],
-                                    "Liga": jogo['league']['name'],
-                                    "Jogo": f"{jogo['teams']['home']['name']} vs {jogo['teams']['away']['name']}",
-                                    "Odd Casa": odd_casa,
-                                    "Odd Fora": odd_fora,
-                                    "Prob. Real Casa": f"{analise['prob_casa']}%",
-                                    "Valor": recomendacao
-                                })
-            except:
-                continue
-        
-        return jogos_analisados, None
-        
-    except Exception as e:
-        return None, str(e)
+    # 6) Destaque das melhores oportunidades (Value Betting)
+    st.subheader("🎯 Sinal de Valor")
 
-# --- INTERFACE ---
-if st.button("🔍 ANALISAR JOGOS"):
-    with st.spinner('Calculando valores...'):
-        resultados, erro = buscar_jogos_com_odds()
-        
-        if erro:
-            st.error(f"❌ {erro}")
-            st.info("""
-            **Soluções:**
-            - Aguarde aprovação da API-Football no RapidAPI
-            - Ou tente outra data (amanhã, por exemplo)
-            """)
-        elif not resultados:
-            st.warning("Sem jogos encontrados para análise nesta data")
-        else:
-            st.success(f"✅ {len(resultados)} jogos analisados!")
-            
-            # Filtrar só os que têm valor
-            com_valor = [j for j in resultados if "APOSTAR" in j['Valor']]
-            
-            if com_valor:
-                st.subheader("🎯 Oportunidades Detectadas")
-                for jogo in com_valor:
-                    with st.container():
-                        st.markdown(f"""
-                        <div style="background-color: #1e2130; padding: 15px; border-radius: 10px; border-left: 5px solid #00ff00; margin-bottom: 10px;">
-                            <p style="margin:0; color: #00ff00;">{jogo['Hora']} - {jogo['Liga']}</p>
-                            <h3 style="margin: 5px 0; color: white;">{jogo['Jogo']}</h3>
-                            <p style="margin:0; color: #ddd;">Odd Casa: <b>{jogo['Odd Casa']}</b> | Odd Fora: <b>{jogo['Odd Fora']}</b></p>
-                            <p style="margin:0; color: #888;">{jogo['Prob. Real Casa']} de chance real</p>
-                            <p style="margin:5px 0; color: #00ff00; font-size: 16px;"><b>{jogo['Valor']}</b></p>
-                        </div>
-                        """, unsafe_allow_html=True)
-            else:
-                st.warning("Nenhum jogo com valor positivo detectado hoje. Tente outra data.")
-            
-            # Mostrar todos os jogos analisados
-            with st.expander("📊 Ver Todos os Jogos Analisados"):
-                df = pd.DataFrame(resultados)
-                st.dataframe(df, use_container_width=True)
+    melhor = None
+    for linha in dados:
+        if linha["Edge_%"] is not None and linha["Edge_%"] > 0:
+            if melhor is None or linha["Edge_%"] > melhor["Edge_%"]:
+                melhor = linha
 
-st.divider()
-st.caption("Matemática: Value Betting Simplificado | Foco: Odds entre 1.50 e 2.50")
+    if melhor:
+        st.success(
+            f"✅ **Valor Encontrado:** Aposte no **{melhor['Mercado']}**.\n\n"
+            f"O modelo estima uma probabilidade de **{melhor['Prob_Modelo_%']}%** (Odd Justa ≈ {melhor['Odd_Justa']}),\n"
+            f"mas a OneNation está pagando **{melhor['Odd_OneNation']}**.\n\n"
+            f"**Edge (Retorno Esperado): {melhor['Edge_%']}%**"
+        )
+    else:
+        st.warning("⚠️ Nenhum mercado com 'Edge' positivo encontrado. Segundo o modelo, as odds da OneNation estão baixas ou justas. Recomendo não apostar neste jogo.")
+else:
+    st.info("Preencha os dados estatísticos e as odds da OneNation acima, depois clique em **'Calcular Probabilidades e Valor'**.")
