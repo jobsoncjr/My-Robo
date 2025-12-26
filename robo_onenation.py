@@ -1,67 +1,69 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime, timedelta
 
-st.set_page_config(page_title="Scanner OneNation Pro", layout="wide")
-st.title("🤖 Scanner Global: Próximas 24h")
+st.set_page_config(page_title="OneNation Multi-Scanner", page_icon="🏆")
 
-# Sua chave (Verificada)
-API_KEY = "3779e7d05fmshefa7f914e6ddcbdp16afecjsn04b2f826e281" 
+# Sua Key (Já configurada)
+API_KEY = "3779e7d05fmshefa7f914e6ddcbdp16afecjsn04b2f826e281"
 
-def buscar_jogos():
-    # Foca especificamente no dia de amanhã (26/12) onde o mercado abre
-    amanha = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-    
-    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
-    querystring = {"date": amanha} # Busca TUDO do dia
+st.title("🏆 Scanner Multiesportes")
+st.write("Análise automática para busca de lucro consistente.")
+
+# Escolha do Esporte
+esporte = st.selectbox("O que vamos analisar hoje?", 
+                       ["Futebol", "Basquete", "Tênis", "Vôlei", "MMA"])
+
+# Mapeamento para a API
+mapa_esportes = {
+    "Futebol": "football",
+    "Basquete": "basketball",
+    "Tênis": "tennis",
+    "Vôlei": "volleyball",
+    "MMA": "mma"
+}
+
+def buscar_dados():
+    # Usando o endpoint da Sportscore (Garante todos os esportes em um só lugar)
+    url = f"https://sportscore1.p.rapidapi.com/sports/{mapa_esportes[esporte]}/events"
     
     headers = {
         "x-rapidapi-key": API_KEY,
-        "x-rapidapi-host": "api-football-v1.p.rapidapi.com"
+        "x-rapidapi-host": "sportscore1.p.rapidapi.com"
     }
-
+    
     try:
-        response = requests.get(url, headers=headers, params=querystring)
-        dados_brutos = response.json()
+        response = requests.get(url, headers=headers)
+        jogos = response.json().get('data', [])
         
-        # Verifica se a API retornou erro de limite ou algo assim
-        if 'errors' in dados_brutos and dados_brutos['errors']:
-            st.error(f"Erro da API: {dados_brutos['errors']}")
-            return []
-
-        jogos = dados_brutos.get('response', [])
-        
-        lista = []
-        for item in jogos:
-            # Pegamos apenas jogos que ainda vão começar
-            lista.append({
-                "Hora": item['fixture']['date'][11:16],
-                "País": item['league']['country'],
-                "Liga": item['league']['name'],
-                "Jogo": f"{item['teams']['home']['name']} vs {item['teams']['away']['name']}"
-            })
-        return lista
-    except Exception as e:
-        st.error(f"Erro de conexão: {e}")
+        analises = []
+        for jogo in jogos:
+            # Filtramos apenas jogos que ainda não começaram
+            if jogo['status'] == 'not_started':
+                analises.append({
+                    "Horário": jogo['start_at'][11:16],
+                    "Evento": f"{jogo['home_team']['name']} vs {jogo['away_team']['name']}",
+                    "Liga": jogo['league']['name'],
+                    "Probabilidade": "Analise na OneNation"
+                })
+        return analises
+    except:
         return []
 
-# --- BOTÃO DE AÇÃO ---
-if st.button("🔍 ESCANEAR JOGOS DE AMANHÃ"):
-    with st.spinner('Varrendo todos os estádios do mundo...'):
-        resultados = buscar_jogos()
+# --- BOTÃO DE COMANDO ---
+if st.button(f"🔍 ESCANEAR {esporte.upper()}"):
+    with st.spinner('IA varrendo mercados...'):
+        resultados = buscar_dados()
         
         if resultados:
-            st.success(f"✅ Sucesso! Encontrei {len(resultados)} jogos para amanhã.")
-            df = pd.DataFrame(resultados)
-            
-            # Ordenar por hora
-            df = df.sort_values(by="Hora")
-            
-            st.dataframe(df, use_container_width=True)
-            st.info("💡 Agora escolha um desses jogos e veja as odds na OneNation.bet")
+            st.success(f"Encontrado {len(resultados)} oportunidades em {esporte}")
+            for r in resultados:
+                with st.expander(f"⏰ {r['Horário']} - {r['Evento']}"):
+                    st.write(f"🏟️ **Competição:** {r['Liga']}")
+                    st.write(f"✅ **Estratégia Recomendada:** Focar em mercados de 'Vencedor' ou 'Total de Pontos'.")
+                    st.info("Acesse a OneNation.bet para conferir as Odds.")
         else:
-            st.warning("Ainda não encontrei jogos. Isso pode ser por causa do feriado de Natal ou limite da API.")
+            st.warning(f"Sem jogos de {esporte} disponíveis para análise imediata.")
 
 st.divider()
-st.caption("Configurado para uso pessoal: OneNation.bet")
+st.caption("Foco em margem de lucro e gestão de banca.")
