@@ -8,7 +8,7 @@ st.set_page_config(page_title="Scanner Automático OneNation", page_icon="🤖")
 st.title("🤖 Meu Robô Analista Automático")
 
 # --- ÁREA DE CONFIGURAÇÃO ---
-# Aqui, no futuro, você colocará sua chave de API real para buscar jogos ao vivo.
+API_KEY =3779e7d05fmshefa7f914e6ddcbdp16afecjsn04b2f826e281
 # Por enquanto, ele vai simular a análise automática dos jogos de hoje.
 
 def buscar_jogos_automaticos():
@@ -40,3 +40,4 @@ for index, row in oportunidades.iterrows():
         st.write(f"**O que fazer:** Abra a OneNation.bet e procure este jogo.")
 
 st.success("🔄 Atualizado automaticamente. Pode fechar o app e voltar mais tarde.")
+
