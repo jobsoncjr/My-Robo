@@ -1,43 +1,67 @@
 import streamlit as st
-import pandas as pd
 import requests
+import pandas as pd
 from datetime import datetime
 
-# Título do seu Aplicativo
-st.set_page_config(page_title="Scanner Automático OneNation", page_icon="🤖")
-st.title("🤖 Meu Robô Analista Automático")
+# --- CONFIGURAÇÃO DA INTERFACE ---
+st.set_page_config(page_title="Robô OneNation Automático", layout="wide")
+st.title("🤖 Scanner de Alta Assertividade")
 
-# --- ÁREA DE CONFIGURAÇÃO ---
-API_KEY =3779e7d05fmshefa7f914e6ddcbdp16afecjsn04b2f826e281
-# Por enquanto, ele vai simular a análise automática dos jogos de hoje.
+# --- SUA CHAVE DE DADOS ---
+API_KEY = "3779e7d05fmshefa7f914e6ddcbdp16afecjsn04b2f826e281" # Pegue em: https://rapidapi.com/api-sports/api/api-football
 
-def buscar_jogos_automaticos():
-    # Simulação de varredura automática (O que o robô faz por trás das câmeras)
-    # Ele compara médias de gols, ataques perigosos e odds.
-    dados = [
-        {"Esporte": "Futebol", "Jogo": "Man. City vs Everton", "Probabilidade": 88, "Dica": "Vitória Casa", "Confiança": "⭐⭐⭐⭐⭐"},
-        {"Esporte": "Futebol", "Jogo": "Real Madrid vs Alavés", "Probabilidade": 79, "Dica": "Vitória Casa", "Confiança": "⭐⭐⭐⭐"},
-        {"Esporte": "Basquete", "Jogo": "Lakers vs Pistons", "Probabilidade": 91, "Dica": "Vencer Partida", "Confiança": "⭐⭐⭐⭐⭐"},
-        {"Esporte": "Tênis", "Jogo": "Djokovic vs Qualifier", "Probabilidade": 95, "Dica": "Vencer Set 1", "Confiança": "⭐⭐⭐⭐⭐"},
-        {"Esporte": "Futebol", "Jogo": "Inter vs Empoli", "Probabilidade": 72, "Dica": "Over 1.5 Gols", "Confiança": "⭐⭐⭐"},
-    ]
-    return pd.DataFrame(dados)
+def obter_previsoes():
+    url = "https://api-football-v1.p.rapidapi.com/v3/predictions"
+    
+    # Vamos buscar previsões para os jogos de hoje
+    # Nota: No plano gratuito, você tem um limite de requisições por dia.
+    headers = {
+        "x-rapidapi-key": API_KEY,
+        "x-rapidapi-host": "api-football-v1.p.rapidapi.com"
+    }
+    
+    # ID 71 é o Brasileirão, ID 39 é Premier League. Podemos buscar por vários.
+    # Para simplificar, o robô vai buscar os destaques do dia.
+    querystring = {"fixture": "1187397"} # Exemplo de ID de jogo real
 
-# --- EXECUÇÃO ---
-st.write(f"📅 **Análise para:** {datetime.now().strftime('%d/%m/%Y')}")
-st.info("O robô está varrendo as ligas agora... Filtrando apenas > 70% de chance.")
+    try:
+        response = requests.get(url, headers=headers, params=querystring)
+        data = response.json()['response'][0]
+        
+        previsao = {
+            "Jogo": f"{data['teams']['home']['name']} vs {data['teams']['away']['name']}",
+            "Conselho": data['predictions']['advice'],
+            "Confiança": data['predictions']['percent']['home'], # Porcentagem de chance casa
+            "Veredito": data['predictions']['winner']['name']
+        }
+        return previsao
+    except:
+        return None
 
-df = buscar_jogos_automaticos()
+# --- O QUE APARECE NO SEU CELULAR ---
+st.subheader("📡 Varredura em Tempo Real")
+st.write(f"Data: {datetime.now().strftime('%d/%m/%Y')}")
 
-# Filtro do Robô: Só mostra o que é maior que 70%
-oportunidades = df[df['Probabilidade'] >= 70]
-
-# Exibição para você apenas abrir e ver
-for index, row in oportunidades.iterrows():
-    with st.expander(f"📍 {row['Jogo']} - {row['Probabilidade']}% de Chance"):
-        st.write(f"**Mercado indicado:** {row['Dica']}")
-        st.write(f"**Nível de Segurança:** {row['Confiança']}")
-        st.write(f"**O que fazer:** Abra a OneNation.bet e procure este jogo.")
-
-st.success("🔄 Atualizado automaticamente. Pode fechar o app e voltar mais tarde.")
-
+if st.button("🚀 INICIAR VARREDURA AUTOMÁTICA"):
+    if API_KEY == "SUA_CHAVE_AQUI":
+        st.error("Erro: Você esqueceu de colocar sua API KEY no código!")
+    else:
+        with st.spinner('Aguarde... IA analisando confrontos...'):
+            # Aqui o robô faria um loop por vários jogos
+            resultado = obter_previsoes()
+            
+            if resultado:
+                st.balloons()
+                st.success("✅ Oportunidade Encontrada!")
+                
+                # Exibição estilizada do cartão de aposta
+                st.markdown(f"""
+                <div style="background-color:#1E1E1E; padding:20px; border-radius:15px; border-left: 10px solid #28a745;">
+                    <h2 style="color:white;">{resultado['Jogo']}</h2>
+                    <p style="color:#00ff00; font-size:25px;"><b>Probabilidade IA: {resultado['Confiança']}</b></p>
+                    <p style="color:white; font-size:18px;">🎯 <b>Conselho:</b> {resultado['Conselho']}</p>
+                    <p style="color:gray;">Acesse a OneNation.bet e procure este mercado.</p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.warning("Nenhuma oportunidade com mais de 70% encontrada agora.")
