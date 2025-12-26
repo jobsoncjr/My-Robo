@@ -1,82 +1,116 @@
 import streamlit as st
+import requests
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
-# Configuração visual para parecer um App profissional
-st.set_page_config(page_title="Painel de Análise OneNation", layout="wide")
+st.set_page_config(page_title="Scanner Real OneNation", layout="wide")
 
-st.markdown("""
-    <style>
-    .main { background-color: #0e1117; }
-    .stMetric { background-color: #1e2130; padding: 15px; border-radius: 10px; }
-    .jogo-card { 
-        background-color: #1e2130; 
-        padding: 20px; 
-        border-radius: 15px; 
-        border-left: 8px solid #00ff00;
-        margin-bottom: 15px;
-        color: white;
+# SUA CHAVE (Funcional)
+API_KEY = "3779e7d05fmshefa7f914e6ddcbdp16afecjsn04b2f826e281"
+
+st.title("🤖 Scanner de Jogos Reais")
+st.write("Buscando dados ao vivo das APIs...")
+
+# --- SELETOR DE DATA ---
+data_escolhida = st.date_input("Escolha a data para analisar:", datetime.now())
+data_formatada = data_escolhida.strftime('%Y-%m-%d')
+
+def buscar_jogos_reais():
+    """Busca jogos reais da API-Football"""
+    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+    
+    querystring = {"date": data_formatada}
+    
+    headers = {
+        "x-rapidapi-key": API_KEY,
+        "x-rapidapi-host": "api-football-v1.p.rapidapi.com"
     }
-    </style>
-    """, unsafe_allow_html=True)
 
-st.title("📊 Painel de Controle: Oportunidades")
+    try:
+        response = requests.get(url, headers=headers, params=querystring)
+        data = response.json()
+        
+        # Verifica se há erro (como Pending Approval)
+        if 'errors' in data and data['errors']:
+            st.error(f"❌ Erro da API: {data['errors']}")
+            return None
+            
+        jogos = data.get('response', [])
+        
+        if not jogos:
+            return []
+        
+        lista_jogos = []
+        for jogo in jogos:
+            # Filtra apenas jogos que não começaram ainda
+            status = jogo['fixture']['status']['short']
+            if status in ['NS', 'TBD']:  # Not Started ou To Be Defined
+                lista_jogos.append({
+                    "Hora": jogo['fixture']['date'][11:16],
+                    "País": jogo['league']['country'],
+                    "Liga": jogo['league']['name'],
+                    "Jogo": f"{jogo['teams']['home']['name']} vs {jogo['teams']['away']['name']}",
+                    "ID": jogo['fixture']['id']
+                })
+        
+        return lista_jogos
+        
+    except Exception as e:
+        st.error(f"❌ Erro de conexão: {str(e)}")
+        return None
 
-# --- DADOS ESTRATÉGICOS (O que o robô encontrou) ---
-def buscar_analise_detalhada():
-    # Simulando os dados reais que a API enviará assim que aprovada
-    # Já incluí campeonatos e horários do Boxing Day (amanhã 26/12)
-    dados = [
-        {
-            "Data": "26/12", "Hora": "09:30", "Campeonato": "Premier League (Inglaterra)",
-            "Jogo": "Man. City vs Everton", "Mercado": "Vitória Casa", 
-            "Confianca": "89%", "Risco": "Baixo", "Dica": "Favorito Absoluto"
-        },
-        {
-            "Data": "26/12", "Hora": "12:00", "Campeonato": "Championship (Inglaterra)",
-            "Jogo": "Leicester vs Ipswich", "Mercado": "Ambos Marcam", 
-            "Confianca": "74%", "Risco": "Médio", "Dica": "Ataques Fortes"
-        },
-        {
-            "Data": "26/12", "Hora": "22:00", "Campeonato": "NBA (Basquete)",
-            "Jogo": "Lakers vs Warriors", "Mercado": "Mais de 218 Pontos", 
-            "Confianca": "82%", "Risco": "Baixo", "Dica": "Jogo de Alta Pontuação"
-        },
-        {
-            "Data": "27/12", "Hora": "15:00", "Campeonato": "Süper Lig (Turquia)",
-            "Jogo": "Galatasaray vs Antalyaspor", "Mercado": "Vitória Casa", 
-            "Confianca": "78%", "Risco": "Baixo", "Dica": "Líder jogando em casa"
-        }
-    ]
-    return dados
-
-# --- INTERFACE ---
-st.sidebar.header("Filtros do Robô")
-filtro_esporte = st.sidebar.multiselect("Filtrar Esportes", ["Futebol", "Basquete"], ["Futebol", "Basquete"])
-
-if st.button("🔄 ATUALIZAR LISTA DE JOGOS"):
-    oportunidades = buscar_analise_detalhada()
-    
-    st.subheader(f"📅 Próximos Eventos Analisados")
-    
-    for item in oportunidades:
-        # Criando o painel visual que você pediu
-        st.markdown(f"""
-        <div class="jogo-card">
-            <span style="color: #00ff00; font-weight: bold;">{item['Data']} às {item['Hora']}</span> - 
-            <span style="color: #888;">{item['Campeonato']}</span>
-            <h2 style="margin: 10px 0;">{item['Jogo']}</h2>
-            <div style="display: flex; justify-content: space-between;">
-                <span>🎯 <b>Mercado:</b> {item['Mercado']}</span>
-                <span>🔥 <b>Confiança:</b> {item['Confianca']}</span>
-                <span>⚠️ <b>Risco:</b> {item['Risco']}</span>
-            </div>
-            <p style="margin-top: 10px; color: #aaa;">💡 <i>Sugestão: {item['Dica']}</i></p>
-            <p style="font-size: 12px; color: #555;">Busque este jogo agora na OneNation.bet</p>
-        </div>
-        """, unsafe_allow_html=True)
-else:
-    st.info("Clique no botão acima para carregar as análises de hoje e amanhã.")
+# --- BOTÃO DE BUSCA ---
+if st.button("🔍 BUSCAR JOGOS REAIS"):
+    with st.spinner(f'Buscando jogos reais para {data_formatada}...'):
+        resultados = buscar_jogos_reais()
+        
+        if resultados is None:
+            st.warning("⚠️ **SUA API ESTÁ COM PENDING APPROVAL**")
+            st.info("""
+            **O que fazer:**
+            1. Vá em: https://rapidapi.com/api-sports/api/api-football
+            2. Verifique se o status mudou de "Pending" para "Active"
+            3. Se continuar pendente, aguarde algumas horas (aprovação manual)
+            
+            **OU**
+            
+            Crie uma conta nova no RapidAPI com outro email e pegue uma chave nova.
+            """)
+            
+        elif len(resultados) == 0:
+            st.warning(f"Não há jogos agendados para {data_formatada}")
+            st.info("Tente selecionar outra data (amanhã ou próximos dias)")
+            
+        else:
+            st.success(f"✅ Encontrados {len(resultados)} jogos!")
+            
+            # Criar tabela organizada
+            df = pd.DataFrame(resultados)
+            
+            # Remover coluna ID da exibição
+            df_display = df.drop(columns=['ID'])
+            
+            # Exibir em formato de tabela
+            st.dataframe(df_display, use_container_width=True)
+            
+            # Exibir em cartões também
+            st.subheader("📋 Detalhes dos Jogos")
+            for _, row in df.iterrows():
+                with st.expander(f"⚽ {row['Jogo']}"):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Horário", row['Hora'])
+                    with col2:
+                        st.metric("País", row['País'])
+                    with col3:
+                        st.metric("Liga", row['Liga'])
+                    
+                    st.info("💡 Busque este jogo na OneNation.bet e compare as odds")
 
 st.divider()
-st.caption("Nota: As análises baseiam-se em estatísticas H2H e forma recente dos times.")
+
+# Informações da API
+with st.expander("ℹ️ Status da Conexão"):
+    st.write(f"**API Key:** {API_KEY[:10]}...")
+    st.write(f"**Data selecionada:** {data_formatada}")
+    st.write("**Endpoint:** API-Football v3")
