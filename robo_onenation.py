@@ -4,66 +4,64 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Scanner OneNation Pro", layout="wide")
-st.title("🤖 Robô Scanner: Varredura Total")
+st.title("🤖 Scanner Global: Próximas 24h")
 
-# Sua chave configurada
+# Sua chave (Verificada)
 API_KEY = "3779e7d05fmshefa7f914e6ddcbdp16afecjsn04b2f826e281" 
 
-def buscar_oportunidades():
-    hoje = datetime.now().date()
-    # Vamos olhar hoje e amanhã para garantir que pegamos jogos
-    datas = [hoje, hoje + timedelta(days=1)]
+def buscar_jogos():
+    # Foca especificamente no dia de amanhã (26/12) onde o mercado abre
+    amanha = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+    
+    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+    querystring = {"date": amanha} # Busca TUDO do dia
     
     headers = {
         "x-rapidapi-key": API_KEY,
         "x-rapidapi-host": "api-football-v1.p.rapidapi.com"
     }
-    
-    lista_final = []
 
-    with st.status("🔍 Buscando todos os jogos disponíveis no mundo...", expanded=True) as status:
-        for data in datas:
-            data_str = data.strftime('%Y-%m-%d')
-            st.write(f"📅 Vasculhando dia {data_str}...")
-            
-            # Buscando TODOS os jogos do dia (sem filtrar por liga específica para garantir resultados)
-            url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
-            querystring = {"date": data_str}
-            
-            try:
-                response = requests.get(url, headers=headers, params=querystring)
-                jogos = response.json().get('response', [])
-                
-                for item in jogos:
-                    # Só pegamos jogos que ainda não começaram
-                    if item['fixture']['status']['short'] == 'NS':
-                        lista_final.append({
-                            "Hora": item['fixture']['date'][11:16],
-                            "Liga": item['league']['name'],
-                            "País": item['league']['country'],
-                            "Jogo": f"{item['teams']['home']['name']} vs {item['teams']['away']['name']}"
-                        })
-            except Exception as e:
-                continue
-                
-        status.update(label="✅ Varredura Concluída!", state="complete", expanded=False)
-    
-    return lista_final
+    try:
+        response = requests.get(url, headers=headers, params=querystring)
+        dados_brutos = response.json()
+        
+        # Verifica se a API retornou erro de limite ou algo assim
+        if 'errors' in dados_brutos and dados_brutos['errors']:
+            st.error(f"Erro da API: {dados_brutos['errors']}")
+            return []
 
-# --- INTERFACE ---
-if st.button("🚀 INICIAR VARREDURA GLOBAL"):
-    resultados = buscar_oportunidades()
-    
-    if resultados:
-        st.write(f"### 📋 {len(resultados)} Jogos encontrados para hoje/amanhã")
+        jogos = dados_brutos.get('response', [])
         
-        # Criando uma tabela para ficar mais fácil de ler muitos jogos
-        df = pd.DataFrame(resultados)
-        st.dataframe(df, use_container_width=True)
+        lista = []
+        for item in jogos:
+            # Pegamos apenas jogos que ainda vão começar
+            lista.append({
+                "Hora": item['fixture']['date'][11:16],
+                "País": item['league']['country'],
+                "Liga": item['league']['name'],
+                "Jogo": f"{item['teams']['home']['name']} vs {item['teams']['away']['name']}"
+            })
+        return lista
+    except Exception as e:
+        st.error(f"Erro de conexão: {e}")
+        return []
+
+# --- BOTÃO DE AÇÃO ---
+if st.button("🔍 ESCANEAR JOGOS DE AMANHÃ"):
+    with st.spinner('Varrendo todos os estádios do mundo...'):
+        resultados = buscar_jogos()
         
-        st.info("💡 Dica: Escolha jogos de ligas que você conhece na OneNation.bet")
-    else:
-        st.warning("A API não retornou jogos. Verifique se sua chave na RapidAPI ainda tem créditos gratuitos (Limite de 100 por dia).")
+        if resultados:
+            st.success(f"✅ Sucesso! Encontrei {len(resultados)} jogos para amanhã.")
+            df = pd.DataFrame(resultados)
+            
+            # Ordenar por hora
+            df = df.sort_values(by="Hora")
+            
+            st.dataframe(df, use_container_width=True)
+            st.info("💡 Agora escolha um desses jogos e veja as odds na OneNation.bet")
+        else:
+            st.warning("Ainda não encontrei jogos. Isso pode ser por causa do feriado de Natal ou limite da API.")
 
 st.divider()
-st.caption("Aviso: Dados via API-Football. Use para análise estatística.")
+st.caption("Configurado para uso pessoal: OneNation.bet")
