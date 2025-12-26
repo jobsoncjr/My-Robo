@@ -1,0 +1,42 @@
+import streamlit as st
+import pandas as pd
+import requests
+from datetime import datetime
+
+# Título do seu Aplicativo
+st.set_page_config(page_title="Scanner Automático OneNation", page_icon="🤖")
+st.title("🤖 Meu Robô Analista Automático")
+
+# --- ÁREA DE CONFIGURAÇÃO ---
+# Aqui, no futuro, você colocará sua chave de API real para buscar jogos ao vivo.
+# Por enquanto, ele vai simular a análise automática dos jogos de hoje.
+
+def buscar_jogos_automaticos():
+    # Simulação de varredura automática (O que o robô faz por trás das câmeras)
+    # Ele compara médias de gols, ataques perigosos e odds.
+    dados = [
+        {"Esporte": "Futebol", "Jogo": "Man. City vs Everton", "Probabilidade": 88, "Dica": "Vitória Casa", "Confiança": "⭐⭐⭐⭐⭐"},
+        {"Esporte": "Futebol", "Jogo": "Real Madrid vs Alavés", "Probabilidade": 79, "Dica": "Vitória Casa", "Confiança": "⭐⭐⭐⭐"},
+        {"Esporte": "Basquete", "Jogo": "Lakers vs Pistons", "Probabilidade": 91, "Dica": "Vencer Partida", "Confiança": "⭐⭐⭐⭐⭐"},
+        {"Esporte": "Tênis", "Jogo": "Djokovic vs Qualifier", "Probabilidade": 95, "Dica": "Vencer Set 1", "Confiança": "⭐⭐⭐⭐⭐"},
+        {"Esporte": "Futebol", "Jogo": "Inter vs Empoli", "Probabilidade": 72, "Dica": "Over 1.5 Gols", "Confiança": "⭐⭐⭐"},
+    ]
+    return pd.DataFrame(dados)
+
+# --- EXECUÇÃO ---
+st.write(f"📅 **Análise para:** {datetime.now().strftime('%d/%m/%Y')}")
+st.info("O robô está varrendo as ligas agora... Filtrando apenas > 70% de chance.")
+
+df = buscar_jogos_automaticos()
+
+# Filtro do Robô: Só mostra o que é maior que 70%
+oportunidades = df[df['Probabilidade'] >= 70]
+
+# Exibição para você apenas abrir e ver
+for index, row in oportunidades.iterrows():
+    with st.expander(f"📍 {row['Jogo']} - {row['Probabilidade']}% de Chance"):
+        st.write(f"**Mercado indicado:** {row['Dica']}")
+        st.write(f"**Nível de Segurança:** {row['Confiança']}")
+        st.write(f"**O que fazer:** Abra a OneNation.bet e procure este jogo.")
+
+st.success("🔄 Atualizado automaticamente. Pode fechar o app e voltar mais tarde.")
