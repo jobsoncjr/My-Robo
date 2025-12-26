@@ -1,18 +1,25 @@
 import streamlit as st
 import requests
 import pandas as pd
+from datetime import datetime
 
-st.set_page_config(page_title="OneNation Multi-Scanner", page_icon="🏆")
+st.set_page_config(page_title="Scanner Multi-Datas OneNation", page_icon="📅", layout="wide")
 
 # Sua Key (Já configurada)
 API_KEY = "3779e7d05fmshefa7f914e6ddcbdp16afecjsn04b2f826e281"
 
-st.title("🏆 Scanner Multiesportes")
-st.write("Análise automática para busca de lucro consistente.")
+st.title("📅 Scanner de Eventos e Datas")
+st.write("Selecione o esporte e a data para encontrar as melhores margens de lucro.")
 
-# Escolha do Esporte
-esporte = st.selectbox("O que vamos analisar hoje?", 
+# --- BARRA LATERAL DE CONFIGURAÇÃO ---
+st.sidebar.header("Filtros de Busca")
+
+esporte = st.sidebar.selectbox("Modalidade", 
                        ["Futebol", "Basquete", "Tênis", "Vôlei", "MMA"])
+
+# SELETOR DE DATA: O usuário escolhe o dia aqui
+data_selecionada = st.sidebar.date_input("Escolha a data", datetime.now())
+data_formatada = data_selecionada.strftime('%Y-%m-%d')
 
 # Mapeamento para a API
 mapa_esportes = {
@@ -23,9 +30,12 @@ mapa_esportes = {
     "MMA": "mma"
 }
 
-def buscar_dados():
-    # Usando o endpoint da Sportscore (Garante todos os esportes em um só lugar)
+def buscar_dados(data_alvo):
+    # Endpoint filtrando por data específica
     url = f"https://sportscore1.p.rapidapi.com/sports/{mapa_esportes[esporte]}/events"
+    
+    # Parâmetros para buscar por data
+    querystring = {"date": data_alvo}
     
     headers = {
         "x-rapidapi-key": API_KEY,
@@ -33,37 +43,40 @@ def buscar_dados():
     }
     
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, params=querystring)
         jogos = response.json().get('data', [])
         
         analises = []
         for jogo in jogos:
-            # Filtramos apenas jogos que ainda não começaram
-            if jogo['status'] == 'not_started':
+            # Pegamos apenas jogos agendados ou que ainda não acabaram
+            status = jogo.get('status', '')
+            if status == 'not_started' or status == 'scheduled':
                 analises.append({
                     "Horário": jogo['start_at'][11:16],
                     "Evento": f"{jogo['home_team']['name']} vs {jogo['away_team']['name']}",
                     "Liga": jogo['league']['name'],
-                    "Probabilidade": "Analise na OneNation"
+                    "ID": jogo['id']
                 })
         return analises
-    except:
+    except Exception as e:
         return []
 
 # --- BOTÃO DE COMANDO ---
-if st.button(f"🔍 ESCANEAR {esporte.upper()}"):
-    with st.spinner('IA varrendo mercados...'):
-        resultados = buscar_dados()
+if st.button(f"🔍 BUSCAR {esporte.upper()} EM {data_selecionada.strftime('%d/%m/%Y')}"):
+    with st.spinner(f'IA vasculhando {esporte} para o dia {data_selecionada.strftime("%d/%m")}...'):
+        resultados = buscar_dados(data_formatada)
         
         if resultados:
-            st.success(f"Encontrado {len(resultados)} oportunidades em {esporte}")
-            for r in resultados:
-                with st.expander(f"⏰ {r['Horário']} - {r['Evento']}"):
-                    st.write(f"🏟️ **Competição:** {r['Liga']}")
-                    st.write(f"✅ **Estratégia Recomendada:** Focar em mercados de 'Vencedor' ou 'Total de Pontos'.")
-                    st.info("Acesse a OneNation.bet para conferir as Odds.")
+            st.success(f"Encontradas {len(resultados)} oportunidades!")
+            
+            # Criando uma tabela organizada
+            df = pd.DataFrame(resultados).drop(columns=['ID'])
+            st.table(df)
+            
+            st.info("💡 Dica de Lucro: Compare estas partidas com as odds na OneNation.bet")
         else:
-            st.warning(f"Sem jogos de {esporte} disponíveis para análise imediata.")
+            st.warning(f"Ainda não há eventos de {esporte} registrados para esta data.")
+            st.info("Tente uma data mais próxima ou mude o esporte.")
 
 st.divider()
-st.caption("Foco em margem de lucro e gestão de banca.")
+st.caption(f"Scanner conectado via Sportscore API. Chave: {API_KEY[:5]}***")
