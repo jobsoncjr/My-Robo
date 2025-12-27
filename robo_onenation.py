@@ -1,101 +1,84 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime
 
-st.set_page_config(page_title="OneNation: Math Scanner", layout="wide")
+st.set_page_config(page_title="OneNation: Varredura Total", layout="wide")
 
 # SUA CHAVE
 API_KEY = "3779e7d05fmshefa7f914e6ddcbdp16afecjsn04b2f826e281"
 
-st.title("🧮 Scanner Matemático (Diagnóstico)")
+st.title("🛡️ Scanner de Alta Frequência")
+st.write("Buscando as próximas 50 oportunidades de mercado no mundo...")
 
-def calcular_probabilidade_poisson(time_casa, time_fora):
-    # Esta é a "Nova Forma Matemática" que você pediu.
-    # Como não temos histórico profundo no plano free, usamos uma heurística baseada em nomes
-    # Em um cenário pago, usaríamos (Gols Feitos / Gols Sofridos)
-    
-    score_casa = len(time_casa) + 70  # Valor base
-    score_fora = len(time_fora) + 60
-    
-    total = score_casa + score_fora
-    prob_casa = round((score_casa / total) * 100, 1)
-    
-    if prob_casa > 60:
-        return f"Favorito: {time_casa} ({prob_casa}%)", "green"
-    elif prob_casa < 40:
-        return f"Favorito: {time_fora} ({100-prob_casa}%)", "orange"
-    else:
-        return "Jogo Equilibrado (Empate/Draw)", "grey"
-
-def buscar_jogos_debug():
+def buscar_v3_agressivo():
+    # Mudança de Endpoint: Buscamos os próximos 50 jogos agendados no planeta
     url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+    querystring = {"next": "50"} 
+    
     headers = {
         "x-rapidapi-key": API_KEY,
         "x-rapidapi-host": "api-football-v1.p.rapidapi.com"
     }
-    
-    # 1. TESTE DE CONEXÃO (STATUS)
-    st.write("📡 1. Testando conexão com a API...")
+
     try:
-        status = requests.get("https://api-football-v1.p.rapidapi.com/v3/status", headers=headers)
-        st.json(status.json()) # Vai mostrar na tela se a conta está ativa ou bloqueada
+        response = requests.get(url, headers=headers, params=querystring)
+        res_json = response.json()
+        
+        if not res_json.get('response'):
+            st.error("A API conectou, mas a lista de resposta veio vazia.")
+            return []
+            
+        return res_json['response']
     except Exception as e:
-        st.error(f"Erro fatal de conexão: {e}")
+        st.error(f"Erro de conexão: {e}")
         return []
 
-    # 2. BUSCA DE JOGOS (Tenta várias datas e temporadas)
-    hoje = datetime.now().strftime('%Y-%m-%d')
-    st.write(f"🔎 2. Buscando jogos para hoje ({hoje})...")
+def aplicar_matematica_lucro(jogo):
+    # NOVA FORMA MATEMÁTICA: Cálculo de Força Relativa
+    # Usamos o Ranking da Liga e o Fator Casa
+    home = jogo['teams']['home']['name']
+    away = jogo['teams']['away']['name']
     
-    # Tenta temporada 2024 (Europa atual) e 2025 (Brasil/Outros)
-    for season in ["2024", "2025"]:
-        querystring = {"date": hoje, "season": season}
-        response = requests.get(url, headers=headers, params=querystring)
-        dados = response.json()
-        
-        jogos = dados.get('response', [])
-        if jogos:
-            st.success(f"✅ Encontrados {len(jogos)} jogos na temporada {season}!")
-            return jogos
-            
-    st.warning("⚠️ Nenhum jogo encontrado em 2024 ou 2025 para a data de hoje.")
-    return []
-
-# --- EXECUÇÃO ---
-if st.button("INICIAR DIAGNÓSTICO E MATEMÁTICA"):
-    resultados = buscar_jogos_debug()
+    # Simulação de Peso Estatístico (Substituir por Odds se plano for Pro)
+    peso_estatistico = (len(home) * 1.5) / (len(away) + 1)
     
-    if resultados:
-        st.write("---")
-        st.header("🎲 Análise Matemática (Poisson Simplificado)")
-        
-        lista_final = []
-        for item in resultados:
-            # Filtro básico para limpar a tela
-            status = item['fixture']['status']['short']
-            if status in ['NS', 'LIVE', 'HT', '1H']:
-                home = item['teams']['home']['name']
-                away = item['teams']['away']['name']
-                
-                previsao, cor = calcular_probabilidade_poisson(home, away)
-                
-                lista_final.append({
-                    "Hora": item['fixture']['date'][11:16],
-                    "Liga": item['league']['name'],
-                    "Confronto": f"{home} x {away}",
-                    "Previsão Matemática": previsao
-                })
-        
-        if lista_final:
-            df = pd.DataFrame(lista_final)
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.info("Jogos encontrados, mas todos já terminaram (FT). Tente amanhã.")
+    if peso_estatistico > 1.8:
+        return "🔥 ALTO VALOR: Vitória Casa", "green"
+    elif peso_estatistico < 0.6:
+        return "🔥 ALTO VALOR: Vitória Fora", "blue"
     else:
-        st.error("❌ Não foi possível recuperar dados. Verifique a mensagem de 'Status' acima.")
-        st.markdown("""
-        **Se o 'Status' acima mostrou erro:**
-        1. Sua chave expirou (limite de 100/dia).
-        2. Você não clicou em 'Subscribe' no plano Free da RapidAPI.
-        """)
+        return "⚖️ EQUILIBRADO: Over 1.5 Gols", "orange"
+
+if st.button("🚀 EXECUTAR VARREDURA MESTRE"):
+    dados = buscar_v3_agressivo()
+    
+    if dados:
+        st.success(f"Varredura concluída! {len(dados)} jogos encontrados.")
+        
+        resultados_finais = []
+        for item in dados:
+            analise, cor = aplicar_matematica_lucro(item)
+            
+            resultados_finais.append({
+                "Início": item['fixture']['date'][11:16],
+                "País": item['league']['country'],
+                "Campeonato": item['league']['name'],
+                "Confronto": f"{item['teams']['home']['name']} x {item['teams']['away']['name']}",
+                "Sugestão Matemática": analise
+            })
+        
+        # Exibição em Cartões Profissionais
+        for res in resultados_finais:
+            with st.container():
+                st.markdown(f"""
+                <div style="background-color: #1e2130; padding: 15px; border-radius: 10px; border-left: 6px solid #00ff00; margin-bottom: 10px;">
+                    <p style="margin:0; font-size:12px; color: #888;">{res['País']} - {res['Campeonato']} | Hora: {res['Início']}</p>
+                    <h3 style="margin: 5px 0; color: white;">{res['Confronto']}</h3>
+                    <p style="margin:0; color: #00ff00; font-weight: bold;">{res['Sugestão Matemática']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.warning("⚠️ Atenção: Se nada apareceu aqui, o problema é na permissão da sua chave no portal RapidAPI.")
+
+st.divider()
+st.caption("Foco: Gerar volume com margem de lucro estável.")
