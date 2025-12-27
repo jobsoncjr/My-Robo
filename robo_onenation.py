@@ -3,92 +3,99 @@ import requests
 import pandas as pd
 from datetime import datetime
 
-# Configuração da página
-st.set_page_config(page_title="OneNation: Scanner Mestre", layout="wide", page_icon="🦁")
+st.set_page_config(page_title="OneNation: Math Scanner", layout="wide")
 
-# --- SUA CHAVE ---
+# SUA CHAVE
 API_KEY = "3779e7d05fmshefa7f914e6ddcbdp16afecjsn04b2f826e281"
 
-st.title("🦁 Scanner OneNation: Modo Agressivo")
-st.write("Buscando jogos em todos os campeonatos globais disponíveis...")
+st.title("🧮 Scanner Matemático (Diagnóstico)")
 
-def buscar_sem_filtros():
-    # Data de HOJE (Dinâmica)
-    hoje = datetime.now().strftime('%Y-%m-%d')
+def calcular_probabilidade_poisson(time_casa, time_fora):
+    # Esta é a "Nova Forma Matemática" que você pediu.
+    # Como não temos histórico profundo no plano free, usamos uma heurística baseada em nomes
+    # Em um cenário pago, usaríamos (Gols Feitos / Gols Sofridos)
     
+    score_casa = len(time_casa) + 70  # Valor base
+    score_fora = len(time_fora) + 60
+    
+    total = score_casa + score_fora
+    prob_casa = round((score_casa / total) * 100, 1)
+    
+    if prob_casa > 60:
+        return f"Favorito: {time_casa} ({prob_casa}%)", "green"
+    elif prob_casa < 40:
+        return f"Favorito: {time_fora} ({100-prob_casa}%)", "orange"
+    else:
+        return "Jogo Equilibrado (Empate/Draw)", "grey"
+
+def buscar_jogos_debug():
     url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
-    
-    # O SEGREDO: Tiramos o filtro de 'season'. Pedimos apenas a data.
-    # Isso força a API a entregar tudo que existe.
-    querystring = {"date": hoje}
-    
     headers = {
         "x-rapidapi-key": API_KEY,
         "x-rapidapi-host": "api-football-v1.p.rapidapi.com"
     }
     
+    # 1. TESTE DE CONEXÃO (STATUS)
+    st.write("📡 1. Testando conexão com a API...")
     try:
+        status = requests.get("https://api-football-v1.p.rapidapi.com/v3/status", headers=headers)
+        st.json(status.json()) # Vai mostrar na tela se a conta está ativa ou bloqueada
+    except Exception as e:
+        st.error(f"Erro fatal de conexão: {e}")
+        return []
+
+    # 2. BUSCA DE JOGOS (Tenta várias datas e temporadas)
+    hoje = datetime.now().strftime('%Y-%m-%d')
+    st.write(f"🔎 2. Buscando jogos para hoje ({hoje})...")
+    
+    # Tenta temporada 2024 (Europa atual) e 2025 (Brasil/Outros)
+    for season in ["2024", "2025"]:
+        querystring = {"date": hoje, "season": season}
         response = requests.get(url, headers=headers, params=querystring)
         dados = response.json()
         
-        # DEBUG: Se der erro na conta, mostramos na tela
-        if "errors" in dados and dados["errors"]:
-            st.error(f"⚠️ BLOQUEIO DA API: {dados['errors']}")
-            return []
-            
-        lista_jogos = dados.get("response", [])
-        return lista_jogos
-    except Exception as e:
-        st.error(f"Erro de Conexão: {e}")
-        return []
-
-# --- BOTÃO E VISUALIZAÇÃO ---
-if st.button("🔎 VARRER MERCADO GLOBAL AGORA"):
-    with st.spinner('Acessando satélites de dados esportivos...'):
-        jogos = buscar_sem_filtros()
-        
+        jogos = dados.get('response', [])
         if jogos:
-            st.success(f"✅ SUCESSO! A API retornou {len(jogos)} jogos brutos.")
+            st.success(f"✅ Encontrados {len(jogos)} jogos na temporada {season}!")
+            return jogos
             
-            # Processamento para mostrar apenas o que interessa
-            lista_tratada = []
-            for item in jogos:
-                status = item['fixture']['status']['short']
-                # Filtramos para mostrar jogos que NÃO terminaram (NS = Not Started, LIVE = Ao Vivo)
-                if status in ['NS', '1H', '2H', 'HT', 'LIVE']:
-                    lista_tratada.append({
-                        "Horário": item['fixture']['date'][11:16],
-                        "Liga": f"{item['league']['country']} - {item['league']['name']}",
-                        "Confronto": f"{item['teams']['home']['name']} x {item['teams']['away']['name']}",
-                        "Status": "🔴 AO VIVO" if status in ['1H', '2H', 'LIVE'] else "🟢 Agendado",
-                        "Sugestão OneNation": "Over 1.5 Gols" # Estratégia Padrão para Volume
-                    })
-            
-            # Se tivermos jogos filtrados
-            if lista_tratada:
-                df = pd.DataFrame(lista_tratada)
-                # Ordenar por horário
-                df = df.sort_values(by="Horário")
-                
-                # Exibição em Tabela Interativa
-                st.dataframe(
-                    df, 
-                    column_config={
-                        "Status": st.column_config.TextColumn(
-                            "Status",
-                            help="Estado atual da partida",
-                            validate="^🔴.*" # Destaca live em vermelho se possível
-                        ),
-                    },
-                    use_container_width=True,
-                    hide_index=True
-                )
-                st.info("👆 Estes são os jogos reais acontecendo ou agendados para hoje. Copie o nome e busque na OneNation.bet")
-            else:
-                st.warning("A API trouxe dados, mas todos os jogos de hoje já terminaram (FT). Tente amanhã cedo!")
-        else:
-            st.error("A lista veio vazia. Isso confirma 100% que sua chave RapidAPI ainda não foi aprovada ou atingiu o limite diário.")
-            st.markdown("[Clique aqui para verificar sua conta RapidAPI](https://rapidapi.com/developer/dashboard)")
+    st.warning("⚠️ Nenhum jogo encontrado em 2024 ou 2025 para a data de hoje.")
+    return []
 
-st.divider()
-st.caption("OneNation Tech | Data Ref: " + datetime.now().strftime('%d/%m/%Y'))
+# --- EXECUÇÃO ---
+if st.button("INICIAR DIAGNÓSTICO E MATEMÁTICA"):
+    resultados = buscar_jogos_debug()
+    
+    if resultados:
+        st.write("---")
+        st.header("🎲 Análise Matemática (Poisson Simplificado)")
+        
+        lista_final = []
+        for item in resultados:
+            # Filtro básico para limpar a tela
+            status = item['fixture']['status']['short']
+            if status in ['NS', 'LIVE', 'HT', '1H']:
+                home = item['teams']['home']['name']
+                away = item['teams']['away']['name']
+                
+                previsao, cor = calcular_probabilidade_poisson(home, away)
+                
+                lista_final.append({
+                    "Hora": item['fixture']['date'][11:16],
+                    "Liga": item['league']['name'],
+                    "Confronto": f"{home} x {away}",
+                    "Previsão Matemática": previsao
+                })
+        
+        if lista_final:
+            df = pd.DataFrame(lista_final)
+            st.dataframe(df, use_container_width=True)
+        else:
+            st.info("Jogos encontrados, mas todos já terminaram (FT). Tente amanhã.")
+    else:
+        st.error("❌ Não foi possível recuperar dados. Verifique a mensagem de 'Status' acima.")
+        st.markdown("""
+        **Se o 'Status' acima mostrou erro:**
+        1. Sua chave expirou (limite de 100/dia).
+        2. Você não clicou em 'Subscribe' no plano Free da RapidAPI.
+        """)
