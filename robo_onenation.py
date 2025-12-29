@@ -22,32 +22,9 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def check_login():
-    """Sistema de login básico."""
-    if 'logged_in' not in st.session_state:
-        st.session_state.logged_in = False
-    
-    if not st.session_state.logged_in:
-        st.title("🔐 Login - OneNation Analyzer")
-        
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            username = st.text_input("Usuário")
-            password = st.text_input("Senha", type="password")
-            
-            if st.button("Entrar", use_container_width=True):
-                # Usuários cadastrados (você pode mudar)
-                users = {
-                    "admin": hash_password("admin123"),
-                    "usuario": hash_password("123456")
-                }
-                
-                if username in users and users[username] == hash_password(password):
-                    st.session_state.logged_in = True
-                    st.session_state.username = username
-                    st.rerun()
-                else:
-                    st.error("❌ Usuário ou senha incorretos")
-        return False
+    """Sistema de login desativado para teste."""
+    st.session_state.logged_in = True
+    st.session_state.username = "admin"
     return True
 
 # =============================================================================
@@ -751,3 +728,4 @@ def main():
 # =============================================================================
 if __name__ == "__main__":
     main()
+
