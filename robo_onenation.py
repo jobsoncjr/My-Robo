@@ -426,4 +426,328 @@ def main():
             with col1:
                 ligas = buscar_ligas_principais()
                 liga_selecionada = st.selectbox(
-                    "Selecione a
+                    "Selecione a Liga",
+                    options=["Todas"] + [l["name"] for l in ligas]
+                )
+            
+            with col2:
+                data_jogo = st.date_input("Data", datetime.today())
+            
+            if st.button("🔍 Buscar Jogos", use_container_width=True):
+                with st.spinner("Buscando jogos..."):
+                    # Determinar ID da liga
+                    league_id = None
+                    if liga_selecionada != "Todas":
+                        for l in ligas:
+                            if l["name"] == liga_selecionada:
+                                league_id = l["id"]
+                                break
+                    
+                    # Buscar jogos
+                    jogos = buscar_jogos_futebol(
+                        date=data_jogo.strftime("%Y-%m-%d"),
+                        league=league_id
+                    )
+                    
+                    if jogos:
+                        st.success(f"✅ {len(jogos)} jogos encontrados!")
+                        
+                        # Armazenar para análise
+                        if 'jogos_dia' not in st.session_state:
+                            st.session_state.jogos_dia = []
+                        st.session_state.jogos_dia = jogos
+                        
+                        # Mostrar jogos
+                        for jogo in jogos[:20]:  # Limitar a 20 jogos
+                            fixture = jogo.get("fixture", {})
+                            teams = jogo.get("teams", {})
+                            league = jogo.get("league", {})
+                            
+                            time_casa = teams.get("home", {}).get("name", "?")
+                            time_fora = teams.get("away", {}).get("name", "?")
+                            horario = fixture.get("date", "")[:16].replace("T", " ")
+                            liga_nome = league.get("name", "")
+                            
+                            with st.expander(f"⚽ {time_casa} vs {time_fora} | {horario}"):
+                                st.write(f"**Liga:** {liga_nome}")
+                                st.write(f"**Horário:** {horario}")
+                                
+                                col_a, col_b = st.columns(2)
+                                with col_a:
+                                    st.write(f"**{time_casa}** (Casa)")
+                                with col_b:
+                                    st.write(f"**{time_fora}** (Fora)")
+                                
+                                if st.button(f"📊 Analisar", key=f"btn_{fixture.get('id')}"):
+                                    st.info("Use a aba 'Análise Manual' para análise detalhada")
+                    else:
+                        st.warning("Nenhum jogo encontrado para esta data/liga")
+                        st.info("💡 Verifique se a API está configurada corretamente")
+        
+        else:
+            st.info(f"🚧 Módulo de {esporte} em desenvolvimento...")
+    
+    # ==========================================================================
+    # TAB 2: ANÁLISE MANUAL
+    # ==========================================================================
+    with tab_analise:
+        st.header("🔬 Análise Manual de Partida")
+        
+        st.write("Insira os dados manualmente para análise (funciona sem API)")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("🏠 Time da Casa")
+            time_casa_nome = st.text_input("Nome do Time", "Time Casa", key="tc_nome")
+            jogos_casa = st.number_input("Jogos na temporada", 1, 50, 15, key="tc_jogos")
+            vitorias_casa = st.number_input("Vitórias", 0, 50, 8, key="tc_vit")
+            empates_casa = st.number_input("Empates", 0, 50, 4, key="tc_emp")
+            derrotas_casa = st.number_input("Derrotas", 0, 50, 3, key="tc_der")
+            gols_marcados_casa = st.number_input("Gols Marcados", 0, 200, 22, key="tc_gm")
+            gols_sofridos_casa = st.number_input("Gols Sofridos", 0, 200, 12, key="tc_gs")
+            forma_casa_input = st.text_input("Forma (últimos 5: W/D/L)", "WWDWL", key="tc_forma")
+        
+        with col2:
+            st.subheader("✈️ Time Visitante")
+            time_fora_nome = st.text_input("Nome do Time", "Time Fora", key="tf_nome")
+            jogos_fora = st.number_input("Jogos na temporada", 1, 50, 15, key="tf_jogos")
+            vitorias_fora = st.number_input("Vitórias", 0, 50, 5, key="tf_vit")
+            empates_fora = st.number_input("Empates", 0, 50, 5, key="tf_emp")
+            derrotas_fora = st.number_input("Derrotas", 0, 50, 5, key="tf_der")
+            gols_marcados_fora = st.number_input("Gols Marcados", 0, 200, 16, key="tf_gm")
+            gols_sofridos_fora = st.number_input("Gols Sofridos", 0, 200, 18, key="tf_gs")
+            forma_fora_input = st.text_input("Forma (últimos 5: W/D/L)", "LDWDW", key="tf_forma")
+        
+        st.markdown("---")
+        st.subheader("💰 Odds da OneNation (opcional)")
+        
+        col_o1, col_o2, col_o3, col_o4, col_o5 = st.columns(5)
+        
+        with col_o1:
+            odd_casa_input = st.number_input("Casa (1)", 1.01, 50.0, 1.75, key="odd_1")
+        with col_o2:
+            odd_empate_input = st.number_input("Empate (X)", 1.01, 50.0, 3.60, key="odd_x")
+        with col_o3:
+            odd_fora_input = st.number_input("Fora (2)", 1.01, 50.0, 4.50, key="odd_2")
+        with col_o4:
+            odd_over_input = st.number_input("Over 2.5", 1.01, 50.0, 2.00, key="odd_ov")
+        with col_o5:
+            odd_btts_input = st.number_input("BTTS Sim", 1.01, 50.0, 1.90, key="odd_btts")
+        
+        if st.button("🚀 ANALISAR PARTIDA", use_container_width=True, type="primary"):
+            # Construir dados no formato esperado
+            media_gols_casa = gols_marcados_casa / jogos_casa if jogos_casa > 0 else 0
+            media_gols_sofridos_casa = gols_sofridos_casa / jogos_casa if jogos_casa > 0 else 0
+            media_gols_fora = gols_marcados_fora / jogos_fora if jogos_fora > 0 else 0
+            media_gols_sofridos_fora = gols_sofridos_fora / jogos_fora if jogos_fora > 0 else 0
+            
+            stats_casa = {
+                "goals": {
+                    "for": {"average": {"home": media_gols_casa, "total": media_gols_casa}},
+                    "against": {"average": {"home": media_gols_sofridos_casa, "total": media_gols_sofridos_casa}}
+                },
+                "form": forma_casa_input.upper(),
+                "fixtures": {"played": {"total": jogos_casa}}
+            }
+            
+            stats_fora = {
+                "goals": {
+                    "for": {"average": {"away": media_gols_fora, "total": media_gols_fora}},
+                    "against": {"average": {"away": media_gols_sofridos_fora, "total": media_gols_sofridos_fora}}
+                },
+                "form": forma_fora_input.upper(),
+                "fixtures": {"played": {"total": jogos_fora}}
+            }
+            
+            # Analisar
+            analise = analisar_partida_futebol(stats_casa, stats_fora)
+            
+            # Odds do mercado
+            odds_mercado = {
+                "casa": odd_casa_input,
+                "empate": odd_empate_input,
+                "fora": odd_fora_input,
+                "over_25": odd_over_input,
+                "btts_sim": odd_btts_input
+            }
+            
+            sugestoes, mercados = gerar_sugestoes(analise, odds_mercado)
+            
+            # Mostrar resultados
+            st.markdown("---")
+            st.header(f"📊 Resultado: {time_casa_nome} vs {time_fora_nome}")
+            
+            # Probabilidades
+            col_p1, col_p2, col_p3 = st.columns(3)
+            
+            with col_p1:
+                st.metric("🏠 Casa", f"{analise['prob_casa']}%", 
+                         f"Odd Justa: {calcular_odd_justa(analise['prob_casa'])}")
+            with col_p2:
+                st.metric("🤝 Empate", f"{analise['prob_empate']}%",
+                         f"Odd Justa: {calcular_odd_justa(analise['prob_empate'])}")
+            with col_p3:
+                st.metric("✈️ Fora", f"{analise['prob_fora']}%",
+                         f"Odd Justa: {calcular_odd_justa(analise['prob_fora'])}")
+            
+            st.markdown("---")
+            
+            # Outros mercados
+            col_m1, col_m2, col_m3 = st.columns(3)
+            
+            with col_m1:
+                st.metric("⚽ Média Gols Esperada", f"{analise['media_gols']}")
+            with col_m2:
+                st.metric("📈 Over 2.5", f"{analise['prob_over_25']}%")
+            with col_m3:
+                st.metric("🎯 Ambas Marcam", f"{analise['prob_btts']}%")
+            
+            st.markdown("---")
+            
+            # Tabela completa
+            st.subheader("📋 Análise de Valor por Mercado")
+            
+            df_mercados = pd.DataFrame(mercados)
+            df_mercados.columns = ["Mercado", "Prob %", "Odd Justa", "Odd OneNation", "Tipo", "Edge %"]
+            df_mercados = df_mercados[["Mercado", "Prob %", "Odd Justa", "Odd OneNation", "Edge %", "Tipo"]]
+            
+            # Colorir edges
+            def colorir_edge(val):
+                if val > 15:
+                    return 'background-color: #28a745; color: white'
+                elif val > 10:
+                    return 'background-color: #ffc107; color: black'
+                elif val > 5:
+                    return 'background-color: #17a2b8; color: white'
+                elif val > 0:
+                    return 'background-color: #6c757d; color: white'
+                else:
+                    return 'background-color: #dc3545; color: white'
+            
+            st.dataframe(
+                df_mercados.style.applymap(colorir_edge, subset=['Edge %']),
+                use_container_width=True
+            )
+            
+            # Sugestões
+            st.markdown("---")
+            st.subheader("🎯 SUGESTÕES DE APOSTA")
+            
+            if sugestoes:
+                for s in sugestoes:
+                    if s["edge"] > edge_minimo:
+                        cor = "green" if s["edge"] > 15 else "orange" if s["edge"] > 10 else "blue"
+                        st.markdown(f"""
+                        <div style="padding: 15px; border-radius: 10px; border-left: 5px solid {cor}; background-color: #f8f9fa; margin: 10px 0;">
+                            <h4>{s['nivel']} - {s['mercado']}</h4>
+                            <p><b>Probabilidade:</b> {s['prob']}% | <b>Odd Justa:</b> {s['odd_justa']} | <b>Odd Mercado:</b> {s['odd_mercado']}</p>
+                            <p><b>Edge:</b> +{s['edge']}%</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.warning(f"⚠️ Nenhuma aposta com edge acima de {edge_minimo}% encontrada")
+            
+            # Confiança
+            st.info(f"📊 **Nível de Confiança:** {analise['confianca']}")
+    
+    # ==========================================================================
+    # TAB 3: APOSTAS COMBINADAS
+    # ==========================================================================
+    with tab_combinadas:
+        st.header("🎰 Gerador de Apostas Combinadas")
+        
+        st.write("Monte combinações com diferentes níveis de risco/retorno")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            num_selecoes = st.slider("Número de seleções", 2, 10, 3)
+            tipo_combinada = st.selectbox(
+                "Perfil de Risco",
+                ["🟢 Conservador (odds baixas, mais seguro)",
+                 "🟡 Moderado (odds médias, equilibrado)",
+                 "🔴 Agressivo (odds altas, mais arriscado)"]
+            )
+        
+        with col2:
+            valor_aposta = st.number_input("Valor da Aposta (R$)", 1.0, 10000.0, 10.0)
+        
+        st.markdown("---")
+        st.subheader("Adicionar Seleções")
+        
+        # Lista de seleções
+        if 'selecoes_combinada' not in st.session_state:
+            st.session_state.selecoes_combinada = []
+        
+        col_add1, col_add2, col_add3 = st.columns([2, 2, 1])
+        
+        with col_add1:
+            nome_selecao = st.text_input("Jogo/Seleção", "Time A vs Time B - Casa")
+        with col_add2:
+            odd_selecao = st.number_input("Odd", 1.01, 100.0, 1.50, key="odd_sel")
+        with col_add3:
+            st.write("")
+            st.write("")
+            if st.button("➕ Adicionar"):
+                st.session_state.selecoes_combinada.append({
+                    "nome": nome_selecao,
+                    "odd": odd_selecao
+                })
+        
+        # Mostrar seleções
+        if st.session_state.selecoes_combinada:
+            st.subheader("📋 Suas Seleções")
+            
+            odd_total = 1.0
+            for i, sel in enumerate(st.session_state.selecoes_combinada):
+                col_s1, col_s2, col_s3 = st.columns([3, 1, 1])
+                with col_s1:
+                    st.write(f"**{i+1}.** {sel['nome']}")
+                with col_s2:
+                    st.write(f"Odd: **{sel['odd']}**")
+                with col_s3:
+                    if st.button("🗑️", key=f"del_{i}"):
+                        st.session_state.selecoes_combinada.pop(i)
+                        st.rerun()
+                
+                odd_total *= sel['odd']
+            
+            st.markdown("---")
+            
+            # Resumo
+            retorno_potencial = valor_aposta * odd_total
+            
+            col_r1, col_r2, col_r3 = st.columns(3)
+            with col_r1:
+                st.metric("Odd Total", f"{odd_total:.2f}")
+            with col_r2:
+                st.metric("Valor Apostado", f"R$ {valor_aposta:.2f}")
+            with col_r3:
+                st.metric("Retorno Potencial", f"R$ {retorno_potencial:.2f}")
+            
+            if st.button("🗑️ Limpar Todas", use_container_width=True):
+                st.session_state.selecoes_combinada = []
+                st.rerun()
+    
+    # ==========================================================================
+    # TAB 4: HISTÓRICO
+    # ==========================================================================
+    with tab_historico:
+        st.header("📊 Histórico de Sugestões")
+        
+        st.info("🚧 Funcionalidade em desenvolvimento - Em breve você poderá salvar e acompanhar suas apostas!")
+        
+        # Placeholder para histórico
+        st.write("Funcionalidades planejadas:")
+        st.write("- ✅ Salvar sugestões do dia")
+        st.write("- ✅ Marcar resultado (green/red)")
+        st.write("- ✅ Estatísticas de acerto")
+        st.write("- ✅ Gráficos de desempenho")
+        st.write("- ✅ ROI por tipo de aposta")
+
+# =============================================================================
+# EXECUTAR APP
+# =============================================================================
+if __name__ == "__main__":
+    main()
