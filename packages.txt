@@ -1,0 +1,2 @@
+# Pacotes do sistema necessários para o Streamlit Cloud
+# (geralmente vazio para projetos Python simples)
