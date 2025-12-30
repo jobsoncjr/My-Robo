@@ -53,32 +53,82 @@ def check_login():
 # =============================================================================
 # CONFIGURAÇÃO DAS APIs
 # =============================================================================
-API_FOOTBALL_KEY = st.secrets.get("API_FOOTBALL_KEY", "")
-API_FOOTBALL_HOST = "api-football-v1.p.rapidapi.com"
+try:
+    API_FOOTBALL_KEY = st.secrets.get("API_FOOTBALL_KEY", "")
+    ODDS_API_KEY = st.secrets.get("ODDS_API_KEY", "")
+except:
+    API_FOOTBALL_KEY = ""
+    ODDS_API_KEY = ""
 
-ODDS_API_KEY = st.secrets.get("ODDS_API_KEY", "")
+# Usar API-Sports direto (não RapidAPI)
+API_FOOTBALL_HOST = "v3.football.api-sports.io"
 
 # =============================================================================
 # FUNÇÕES DE API - FUTEBOL
 # =============================================================================
 def api_football_request(endpoint, params=None):
-    """Requisição para API-Football."""
+    """Requisição para API-Football via API-Sports direto."""
     if not API_FOOTBALL_KEY:
+        st.error("❌ API Key não configurada. Configure em .streamlit/secrets.toml")
         return None
     
-    url = f"https://{API_FOOTBALL_HOST}/v3/{endpoint}"
+    # Usar API-Sports direto
+    url = f"https://{API_FOOTBALL_HOST}/{endpoint}"
     headers = {
-        "X-RapidAPI-Key": API_FOOTBALL_KEY,
-        "X-RapidAPI-Host": API_FOOTBALL_HOST
+        "x-apisports-key": API_FOOTBALL_KEY
     }
     
     try:
         response = requests.get(url, headers=headers, params=params, timeout=30)
+        
+        # Debug: mostrar detalhes da requisição
+        if response.status_code != 200:
+            st.warning(f"Status Code: {response.status_code}")
+            st.warning(f"Response: {response.text[:500]}")
+        
+        # Tratamento específico de erros
+        if response.status_code == 403:
+            st.error(f"""
+            ❌ **Erro 403: Acesso Negado**
+            
+            **Status:** {response.status_code}
+            
+            Possíveis causas:
+            1. **Você não se inscreveu na API** - Vá em [RapidAPI](https://rapidapi.com/api-sports/api-api-football) 
+               e clique em "Subscribe" no plano **MEGA** (gratuito)
+            2. **Headers incorretos** - Verificando formato dos headers
+            3. **Endpoint incorreto**
+            
+            **URL usada:** {url}
+            **Chave:** ...{API_FOOTBALL_KEY[-8:]}
+            """)
+            return None
+        elif response.status_code == 429:
+            st.error("⚠️ Limite de requisições atingido. Aguarde ou faça upgrade do plano.")
+            return None
+        elif response.status_code == 401:
+            st.error("❌ API Key inválida. Verifique sua chave em .streamlit/secrets.toml")
+            return None
+        
         response.raise_for_status()
         data = response.json()
+        
+        # Verificar se há erros na resposta
+        if "errors" in data and data["errors"]:
+            st.error(f"❌ Erro da API: {data['errors']}")
+            return None
+        
+        # Verificar quota
+        if "parameters" in data or "response" in data:
+            st.success(f"✅ Requisição bem-sucedida! Dados retornados: {len(data.get('response', []))} items")
+            
         return data.get("response", [])
+        
+    except requests.exceptions.RequestException as e:
+        st.error(f"❌ Erro de conexão: {str(e)}")
+        return None
     except Exception as e:
-        st.error(f"Erro API Football: {e}")
+        st.error(f"❌ Erro inesperado: {str(e)}")
         return None
 
 def buscar_jogos_futebol(date=None, league=None, live=False):
